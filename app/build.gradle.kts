@@ -2,7 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-
+    kotlin("plugin.serialization") version "1.9.10"
 }
 
 android {
@@ -51,20 +51,23 @@ dependencies {
 
     //Corrutinas (Para delay)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx")
     implementation("androidx.activity:activity-compose")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android")
 
     // Compose BOM para mantener versiones consistentes
     implementation(platform("androidx.compose:compose-bom:2024.05.00"))
+    implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material:material")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended-android:1.7.8")
-    implementation("androidx.datastore:datastore-preferences:1.0.0")
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("com.google.code.gson:gson:2.10.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1")
 
     // Test
     testImplementation("junit:junit:4.13.2")

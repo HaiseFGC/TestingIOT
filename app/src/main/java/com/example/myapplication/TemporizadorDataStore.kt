@@ -1,35 +1,42 @@
 package com.example.myapplication
 
 import android.content.Context
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
+import android.util.Log
+import androidx.datastore.preferences.core.*
 import androidx.datastore.preferences.preferencesDataStore
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.*
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.builtins.ListSerializer
 
+
+//Crea instancia unica de DataStore
 private val Context.dataStore by preferencesDataStore(name = "temporizadores")
 
 class TemporizadorDataStore(private val context: Context) {
 
-    private val TEMPORIZADORES_KEY = stringPreferencesKey("lista_temporizadores")
-    private val gson = Gson()
+    private val TEMPORIZADORES_KEY = stringPreferencesKey("temporizadores-json")
 
-    val listaTemporizadores: Flow<List<TemporizadorData>> = context.dataStore.data.map { preferences ->
-        val json = preferences[TEMPORIZADORES_KEY]
-        if (json.isNullOrEmpty()) {
-            emptyList()
-        } else {
-            val type = object : TypeToken<List<TemporizadorData>>() {}.type
-            gson.fromJson<List<TemporizadorData>>(json, type)
+    //Flow que devuelve la lista de temporizadores
+    val listaTemporizadores: Flow<List<TemporizadorData>> = context.dataStore.data
+        .map { preferences ->
+            val jsonString = preferences[TEMPORIZADORES_KEY] ?: return@map emptyList()
+            try{
+                Json.decodeFromString(jsonString)
+            }catch (e: Exception){
+                emptyList()
+            }
         }
-    }
 
+    //Guardar la lista como un Json string
     suspend fun guardarTemporizadores(lista: List<TemporizadorData>) {
-        val json = gson.toJson(lista)
         context.dataStore.edit { preferences ->
-            preferences[TEMPORIZADORES_KEY] = json
+            val jsonString = Json.encodeToString(lista)
+            preferences[TEMPORIZADORES_KEY] = jsonString
         }
     }
+
+
 }
