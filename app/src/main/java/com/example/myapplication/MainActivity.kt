@@ -1,8 +1,10 @@
 package com.example.myapplication
 
+import android.app.AlertDialog
 import android.app.TimePickerDialog
 import android.icu.util.Calendar
 import android.os.Bundle
+import android.media.MediaPlayer
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -68,7 +70,8 @@ fun PantallaPrincipal(navController: NavHostController){
             .padding(4.dp)
     ){
         Termometro(temp = 10.2f)
-        CalidadAire(porcentaje = 50)
+        CalidadAireDinamico()
+        FiltracionGas(nivelGas = 105.0f)
         SeleccionarVelocidad { seleccion -> velocidadSeleccionada = seleccion }
         Spacer(modifier = Modifier.weight(1f))
         Row(
@@ -242,6 +245,18 @@ fun Termometro(temp: Float){
 fun CalidadAire(porcentaje: Int){
     var sweepAngle = (porcentaje/ 100f) * 360f
 
+    val calidadTexto = when{
+        porcentaje >= 80 -> "Excelente"
+        porcentaje in 50..79 -> "Bueno"
+        else -> "Malo"
+    }
+
+    val colorIndicator = when{
+        porcentaje >= 80 -> Color(0xFF4BBF33)
+        porcentaje in 50..79 -> Color(0xFFC8A728)
+        else -> Color.Red
+    }
+
     Box(
         modifier = Modifier.size(150.dp),
         contentAlignment = Alignment.Center
@@ -255,7 +270,7 @@ fun CalidadAire(porcentaje: Int){
                 style = Stroke(15f)
             )
             drawArc(
-                color = Color(0xFF4CAF50),
+                color = colorIndicator,
                 startAngle = -90f,
                 sweepAngle = sweepAngle,
                 useCenter = false,
@@ -270,12 +285,77 @@ fun CalidadAire(porcentaje: Int){
     }
 
     Text(
-        text = "Calidad del aire: ",
-        color = Color(0xFF4CAF50),
+        text = "Calidad del aire: $calidadTexto",
+        color = colorIndicator,
         style = MaterialTheme.typography.labelLarge,
         modifier = Modifier.padding(top = 8.dp)
     )
 }
+
+@Composable
+fun CalidadAireDinamico(){
+    val calidadAire = remember { mutableStateOf(0)}
+
+    //Actualizar el valor cada 5 segundos
+    LaunchedEffect(Unit){
+        while(true){
+            delay(5000)
+            calidadAire.value = (0..100).random()
+        }
+    }
+
+    CalidadAire(porcentaje = calidadAire.value)
+}
+
+@Composable
+fun FiltracionGas(nivelGas: Float){
+    val context = LocalContext.current
+    val hayFiltracion = nivelGas >= 70f
+
+    var mostrarDialogo by remember { mutableStateOf(hayFiltracion)}
+
+    //Sonido de alerta
+    LaunchedEffect(hayFiltracion) {
+        if(hayFiltracion){
+            val mediaPlayer = MediaPlayer.create(context, R.raw.alerta_gas)
+            mediaPlayer?.start()
+        }
+    }
+
+    //Mostrar mensaje en pantalla
+    val mensaje = when {
+        nivelGas >= 100 -> "🚨 Peligro: Alta filtración de gas"
+        nivelGas in 70f..99f -> "⚠️ Filtración de gas detectada"
+        else -> "✅ Nivel de gas normal"
+    }
+
+    val color = when {
+        nivelGas >= 100 -> Color(0xFF771313) // rojo oscuro
+        nivelGas >= 70 -> Color.Red
+        else -> Color.Green
+    }
+
+    Text(
+        text = mensaje,
+        color = color,
+        style = MaterialTheme.typography.labelLarge
+    )
+
+    //Muestra pop-up en caso de filtración
+    if(hayFiltracion && mostrarDialogo){
+        AlertDialog(
+            onDismissRequest = { mostrarDialogo =  false},
+            confirmButton = {
+                Button(onClick = {mostrarDialogo = false}){
+                    Text("Entendido")
+                }
+            },
+            title = { Text("Alerta de gas")},
+            text = { Text("Se ha detectado una posible filtración de gas. Por favor revise la posible fuente")}
+        )
+    }
+}
+
 
 @Composable
 fun Temporizador(navController: NavHostController) {
