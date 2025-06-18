@@ -5,6 +5,8 @@ import android.app.TimePickerDialog
 import android.icu.util.Calendar
 import android.os.Bundle
 import android.media.MediaPlayer
+import android.media.RingtoneManager
+import android.media.Ringtone
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -311,47 +313,36 @@ fun CalidadAireDinamico(){
 fun FiltracionGas(nivelGas: Float){
     val context = LocalContext.current
     val hayFiltracion = nivelGas >= 70f
-
-    var mostrarDialogo by remember { mutableStateOf(hayFiltracion)}
+    var mostrarDialogo by remember { mutableStateOf(false)}
 
     //Sonido de alerta
     LaunchedEffect(hayFiltracion) {
         if(hayFiltracion){
-            val mediaPlayer = MediaPlayer.create(context, R.raw.alerta_gas)
-            mediaPlayer?.start()
+            val notificacionUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            val ringtone = RingtoneManager.getRingtone(context, notificacionUri)
+            ringtone.play()
+            mostrarDialogo = true
         }
     }
 
-    //Mostrar mensaje en pantalla
-    val mensaje = when {
-        nivelGas >= 100 -> "🚨 Peligro: Alta filtración de gas"
-        nivelGas in 70f..99f -> "⚠️ Filtración de gas detectada"
-        else -> "✅ Nivel de gas normal"
+    // Mostrar mensaje en pantalla
+    if(hayFiltracion){
+        Text("Filtración de gas detectada!", color = MaterialTheme.colorScheme.error)
+    }else{
+        Text("Nivel de gas normal")
     }
 
-    val color = when {
-        nivelGas >= 100 -> Color(0xFF771313) // rojo oscuro
-        nivelGas >= 70 -> Color.Red
-        else -> Color.Green
-    }
-
-    Text(
-        text = mensaje,
-        color = color,
-        style = MaterialTheme.typography.labelLarge
-    )
-
-    //Muestra pop-up en caso de filtración
-    if(hayFiltracion && mostrarDialogo){
+    //Mostrar popup en caso de filtración
+    if(mostrarDialogo){
         AlertDialog(
-            onDismissRequest = { mostrarDialogo =  false},
+            onDismissRequest = {mostrarDialogo = false},
+            title = { Text("¡Alerta de gas!")},
+            text = { Text("Se ha detectado una filtración de gas. Por favor, revise el entorno")},
             confirmButton = {
-                Button(onClick = {mostrarDialogo = false}){
+                Button(onClick = { mostrarDialogo = false}){
                     Text("Entendido")
                 }
-            },
-            title = { Text("Alerta de gas")},
-            text = { Text("Se ha detectado una posible filtración de gas. Por favor revise la posible fuente")}
+            }
         )
     }
 }
