@@ -37,7 +37,7 @@ import androidx.navigation.NavHostController
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.*
-
+import com.example.myapplication.componentes.GraficoBarras
 
 
 class MainActivity : ComponentActivity() {
@@ -108,39 +108,6 @@ fun PantallaPrincipal(navController: NavHostController){
 }
 
 @Composable
-fun SeleccionarVelocidad(onSeleccionado: (String) -> Unit){
-    val opciones = listOf("Apagar","Velocidad 1", "Velocidad 2", "Velocidad 3")
-    var seleccionActual by remember { mutableStateOf("Apagar")}
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally ){
-        Text("Velocidad de ventilador", style = MaterialTheme.typography.labelLarge)
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(
-            horizontalArrangement  = Arrangement.SpaceEvenly,
-            modifier = Modifier.fillMaxWidth()
-        ){
-            opciones.forEachIndexed { index, opcion ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally){
-                    OutlinedButton(
-                        onClick = {
-                            seleccionActual = opcion
-                            onSeleccionado(opcion)
-                        },
-                        shape = CircleShape,
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            containerColor = if (seleccionActual == opcion) Color.Black else Color.White
-                        ),
-                        border = BorderStroke(1.dp, Color.Black),
-                        modifier = Modifier.size(50.dp)
-                    ){
-                        Text("${index}", color = if(seleccionActual == opcion) Color.White else Color.Black)
-                    }
-                }
-            }
-        }
-    }
-}
-@Composable
 fun PantallaTemporizador(navController: NavHostController){
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -167,11 +134,32 @@ fun Metricas(navController: NavHostController){
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Esta es la pestaña de Métricas")
+            Graficas(navController)
             Spacer(modifier = Modifier.height(16.dp))
             Button(onClick = { navController.navigate("principal") }) {
                 Text("Volver")
             }
+        }
+    }
+}
+
+@Composable
+fun Graficas(navController: NavHostController) {
+    val datos = listOf(40f, 55f, 30f, 70f, 45f, 60f, 20f) // Tiempo de uso por día (ejemplo)
+    val dias = listOf("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom")
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Tiempo de uso semanal", style = MaterialTheme.typography.titleLarge)
+        Spacer(modifier = Modifier.height(8.dp))
+        GraficoBarras(datos, dias)
+        Spacer(modifier = Modifier.height(16.dp))
+        Button(onClick = { navController.navigate("principal") }) {
+            Text("Volver")
         }
     }
 }

@@ -68,6 +68,7 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1")
+    implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
 
     // Test
     testImplementation("junit:junit:4.13.2")
