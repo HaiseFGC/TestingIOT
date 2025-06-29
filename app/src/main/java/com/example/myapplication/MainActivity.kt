@@ -373,17 +373,9 @@ fun Temporizador(navController: NavHostController) {
             listaTemporizadores.addAll(temporizadores)
         }
     }
-
     // Recalcular cuando cambia el contenido (convierte la lista en una lista inmutable nueva)
     LaunchedEffect(listaTemporizadores.toList()) {
         dataStore.guardarTemporizadores(listaTemporizadores)
-    }
-
-    //Guardar cambios en el dataStore cuando listaTemporizadores cambie
-    LaunchedEffect(listaTemporizadores){
-        scope.launch {
-            dataStore.guardarTemporizadores(listaTemporizadores)
-        }
     }
 
     //Actualizar hora actual cada segundo
@@ -398,14 +390,21 @@ fun Temporizador(navController: NavHostController) {
     LaunchedEffect(mostrarPicker, seleccionandoHoraInicio) {
         if (mostrarPicker) {
             showTimePicker(context) { selected ->
-                if (seleccionandoHoraInicio) {
-                    horaTempInicio = selected
-                    seleccionandoHoraInicio = false
-                } else {
-                    horaTempFin = selected
-                    listaTemporizadores.add(TemporizadorData(horaTempInicio, horaTempFin))
+                if (selected == null) {
+                    // Usuario canceló
                     mostrarPicker = false
                     seleccionandoHoraInicio = true
+                } else {
+                    if (seleccionandoHoraInicio) {
+                        horaTempInicio = selected
+                        seleccionandoHoraInicio = false
+                        mostrarPicker = true // Para continuar seleccionando la hora de fin
+                    } else {
+                        horaTempFin = selected
+                        listaTemporizadores.add(TemporizadorData(horaTempInicio, horaTempFin))
+                        mostrarPicker = false
+                        seleccionandoHoraInicio = true
+                    }
                 }
             }
         }
@@ -477,9 +476,12 @@ fun getCurrentTime(): String{
     return String.format("%02d:%02d", hour, minute)
 }
 
-fun showTimePicker(context: android.content.Context, onTimeSelected: (String) -> Unit){
+fun showTimePicker(
+    context: android.content.Context,
+    onTimeSelected: (String?) -> Unit // ahora puede ser null
+) {
     val calendar = Calendar.getInstance()
-    TimePickerDialog(
+    val dialog = TimePickerDialog(
         context,
         { _, hour, minute ->
             val formatted = String.format("%02d:%02d", hour, minute)
@@ -488,22 +490,32 @@ fun showTimePicker(context: android.content.Context, onTimeSelected: (String) ->
         calendar.get(Calendar.HOUR_OF_DAY),
         calendar.get(Calendar.MINUTE),
         true
-    ).show()
+    )
+
+    // Manejo de cancelación
+    dialog.setOnCancelListener {
+        onTimeSelected(null)
+    }
+
+    dialog.show()
 }
 
-fun isTimeInRange(current: String, start: String, end: String): Boolean{
+fun isTimeInRange(current: String, start: String, end: String): Boolean {
     val formatter = java.text.SimpleDateFormat("HH:mm", Locale.getDefault())
-    val currentDate = formatter.parse(current)
-    val startDate = formatter.parse(start)
-    val endDate = formatter.parse(end)
+    return try {
+        val currentDate = formatter.parse(current)
+        val startDate = formatter.parse(start)
+        val endDate = formatter.parse(end)
 
-    return if(startDate.before(endDate)){
-        !currentDate.before(startDate) && currentDate.before(endDate)
-    }else{
-        !currentDate.before(startDate) || currentDate.before(endDate)
+        if (startDate.before(endDate)) {
+            !currentDate.before(startDate) && currentDate.before(endDate)
+        } else {
+            !currentDate.before(startDate) || currentDate.before(endDate)
+        }
+    } catch (e: Exception) {
+        false
     }
 }
-
 //Modelo temporizador
 
 @kotlinx.serialization.Serializable
