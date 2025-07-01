@@ -86,7 +86,7 @@ fun PantallaPrincipal(navController: NavHostController){
             .padding(4.dp)
     ){
         Termometro(temp = temperatura)
-        CalidadAireDinamico()
+        CalidadAireDinamico(humedad = humedad)
         FiltracionGas(nivelGas = gas)
         SeleccionarVelocidad { seleccion ->
             velocidadSeleccionada = seleccion
@@ -366,18 +366,19 @@ fun CalidadAire(porcentaje: Int){
 }
 
 @Composable
-fun CalidadAireDinamico(){
-    val calidadAire = remember { mutableStateOf(0)}
+fun CalidadAireDinamico(humedad: Float){
+    val porcentaje = humedad.toInt().coerceIn(0,100)
+    var humedadMostrada by remember { mutableStateOf(humedad)}
 
     //Actualizar el valor cada 5 segundos
     LaunchedEffect(Unit){
         while(true){
             delay(5000)
-            calidadAire.value = (0..100).random()
+            humedadMostrada = humedad
         }
     }
 
-    CalidadAire(porcentaje = calidadAire.value)
+    CalidadAire(porcentaje)
 }
 
 @Composable
