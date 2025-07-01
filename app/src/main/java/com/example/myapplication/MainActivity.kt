@@ -1,31 +1,21 @@
 package com.example.myapplication
 
-import android.app.AlertDialog
-import android.app.TimePickerDialog
-import android.icu.util.Calendar
+import android.content.Context
 import android.os.Bundle
-import android.media.MediaPlayer
 import android.media.RingtoneManager
-import android.media.Ringtone
-import android.util.Log
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.lazy.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -35,9 +25,13 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.NavHostController
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import java.util.*
 import com.example.myapplication.componentes.GraficoBarras
+import com.example.myapplication.ui.theme.SplashScreen
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import android.net.wifi.WifiNetworkSpecifier
 
 
 class MainActivity : ComponentActivity() {
@@ -66,15 +60,48 @@ fun AppNavegacion(){
 @Composable
 fun PantallaPrincipal(navController: NavHostController){
     var velocidadSeleccionada by remember { mutableStateOf("Apagar")}
+
+    var socketManager = remember { MySocketManager() }
+
+    //Valores recibidos del servidor
+    var temperatura by remember { mutableStateOf(0f)}
+    var humedad by remember { mutableStateOf(0f)}
+    var gas by remember { mutableStateOf(0f)}
+
+    //Conexión a WebSocket (una sola vez)
+    LaunchedEffect(Unit) {
+        socketManager.conectar(
+            onTemperatura = { temperatura = it },
+            onHumedad = { humedad = it },
+            onGas = { gas = it.toFloat()}
+
+        )
+        // (opcional) si quieres desconectar al salir:
+        // awaitDispose { socketManager.desconectar() }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(4.dp)
     ){
-        Termometro(temp = 10.2f)
+        Termometro(temp = temperatura)
         CalidadAireDinamico()
-        FiltracionGas(nivelGas = 105.0f)
-        SeleccionarVelocidad { seleccion -> velocidadSeleccionada = seleccion }
+        FiltracionGas(nivelGas = gas)
+        SeleccionarVelocidad { seleccion ->
+            velocidadSeleccionada = seleccion
+
+            val velocidadInt = when(seleccion){
+                "Apagar" -> 0
+                "Velocidad 1" -> 1
+                "Velocidad 2" -> 2
+                "Velocidad 3 "-> 3
+                else -> 0
+            }
+
+            //Enviar por websocket
+            socketManager.enviarVelocidad(velocidadInt)
+        }
         Spacer(modifier = Modifier.weight(1f))
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -167,6 +194,8 @@ fun Graficas(navController: NavHostController) {
 
 @Composable
 fun PantallaConfiguracion(navController: NavHostController){
+    val context = LocalContext.current
+    var mostrarDialogoWifi by remember { mutableStateOf(false)}
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
@@ -174,7 +203,18 @@ fun PantallaConfiguracion(navController: NavHostController){
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Text("Esta es la pestaña de configuración")
+            if (mostrarDialogoWifi) {
+                DialogoWifi(
+                    onDismiss = { mostrarDialogoWifi = false },
+                    onConectar = { ssid, password ->
+                        conectarAWifi(context, ssid, password)
+                    }
+                )
+            }
+
+            Button(onClick = { mostrarDialogoWifi = true }) {
+                Text("Conectarse a Wi-Fi")
+            }
             Spacer(modifier = Modifier.height(16.dp))
             Button(onClick = { navController.navigate("principal") }) {
                 Text("Volver")
@@ -184,24 +224,67 @@ fun PantallaConfiguracion(navController: NavHostController){
 }
 
 @Composable
-fun SplashScreen(navController: NavHostController){
-    LaunchedEffect(true){
-        delay(2000)
-        navController.navigate("principal"){
-            popUpTo("splash"){inclusive = true}
+fun DialogoWifi(
+    onDismiss: () -> Unit,
+    onConectar: (String, String) -> Unit
+) {
+    var ssid by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Conexión Wi-Fi") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = ssid,
+                    onValueChange = { ssid = it },
+                    label = { Text("Nombre de red (SSID)") }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Contraseña") }
+                )
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                onConectar(ssid, password)
+                onDismiss()
+            }) {
+                Text("Conectar")
+            }
+        },
+        dismissButton = {
+            Button(onClick = onDismiss) {
+                Text("Cancelar")
+            }
+        }
+    )
+}
+
+fun conectarAWifi(context: Context, ssid: String, password: String) {
+    val specifier = WifiNetworkSpecifier.Builder()
+        .setSsid(ssid)
+        .setWpa2Passphrase(password)
+        .build()
+
+    val request = NetworkRequest.Builder()
+        .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+        .setNetworkSpecifier(specifier)
+        .build()
+
+    val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val callback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            super.onAvailable(network)
+            connectivityManager.bindProcessToNetwork(network)
         }
     }
 
-    Box(
-        modifier = Modifier.fillMaxSize()
-    ){
-        Image(
-            painter = painterResource(id = R.drawable.splashscreen),
-            contentDescription = "SplashScreen",
-            contentScale = ContentScale.FillBounds,
-            modifier = Modifier.fillMaxSize()
-        )
-    }
+    connectivityManager.requestNetwork(request, callback)
 }
 
 @Composable
@@ -332,176 +415,6 @@ fun FiltracionGas(nivelGas: Float){
                 }
             }
         )
-    }
-}
-
-
-@Composable
-fun Temporizador(navController: NavHostController) {
-    val context = LocalContext.current
-    val dataStore = remember{ TemporizadorDataStore(context)}
-    val scope = rememberCoroutineScope()
-
-    var currentTime by remember { mutableStateOf(getCurrentTime()) }
-    var mostrarPicker by remember { mutableStateOf(false) }
-    var seleccionandoHoraInicio by remember { mutableStateOf(true) }
-    var horaTempInicio by remember { mutableStateOf("") }
-    var horaTempFin by remember { mutableStateOf("") }
-
-    
-    //Para obtener la lista de temporizadores desde el dataStore
-    val temporizadores by dataStore.listaTemporizadores.collectAsState(initial = emptyList())
-    val listaTemporizadores = remember { mutableStateListOf<TemporizadorData>()}
-
-    //Sincronizar listaTemporizadores con el dataStore al cargar
-    LaunchedEffect(temporizadores) {
-        Log.d("Temporizador", "Sincronizando temporizadores: $temporizadores")
-        if(listaTemporizadores.isEmpty()){
-            listaTemporizadores.clear()
-            listaTemporizadores.addAll(temporizadores)
-        }
-    }
-    // Recalcular cuando cambia el contenido (convierte la lista en una lista inmutable nueva)
-    LaunchedEffect(listaTemporizadores.toList()) {
-        dataStore.guardarTemporizadores(listaTemporizadores)
-    }
-
-    //Actualizar hora actual cada segundo
-    LaunchedEffect(Unit) {
-        while (true) {
-            currentTime = getCurrentTime()
-            delay(1000L)
-        }
-    }
-
-    //Mostrar TimePicker cuando sea necesario
-    LaunchedEffect(mostrarPicker, seleccionandoHoraInicio) {
-        if (mostrarPicker) {
-            showTimePicker(context) { selected ->
-                if (selected == null) {
-                    // Usuario canceló
-                    mostrarPicker = false
-                    seleccionandoHoraInicio = true
-                } else {
-                    if (seleccionandoHoraInicio) {
-                        horaTempInicio = selected
-                        seleccionandoHoraInicio = false
-                        mostrarPicker = true // Para continuar seleccionando la hora de fin
-                    } else {
-                        horaTempFin = selected
-                        listaTemporizadores.add(TemporizadorData(horaTempInicio, horaTempFin))
-                        mostrarPicker = false
-                        seleccionandoHoraInicio = true
-                    }
-                }
-            }
-        }
-    }
-
-    // Verificar si hay un temporizador activo
-    var temporizadorActivo = listaTemporizadores.any {
-        isTimeInRange(currentTime, it.horaInicio, it.horaFin)
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text("Hora actual: $currentTime", style = MaterialTheme.typography.headlineMedium)
-
-        Button(onClick = { mostrarPicker = true }) {
-            Text("Agregar Temporizador")
-        }
-
-        if (mostrarPicker) {
-            Text("Seleccionando ${if (seleccionandoHoraInicio) "hora Inicio" else "hora Fin"}")
-        }
-
-        if (temporizadorActivo) {
-            Text("hay un temporizador activo")
-        } else {
-            Text("No hay temporizadores activos")
-        }
-
-        HorizontalDivider()
-
-        Text("Temporizadores:", style = MaterialTheme.typography.titleMedium)
-        LazyColumn{
-            itemsIndexed(listaTemporizadores) { index, t ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ){
-                    Text("Temporizador ${index + 1}: ${t.horaInicio} - ${t.horaFin}", modifier = Modifier.weight(1f))
-                    Button(
-                        onClick = {
-                            scope.launch{
-                                dataStore.guardarTemporizadores(listaTemporizadores.apply { removeAt(index)})
-                            }},
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Red)
-                    ){
-                        Text("Eliminar", color = Color.White)
-                    }
-                }
-            }
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = { navController.navigate("principal") }) {
-            Text("Volver")
-        }
-
-    }
-}
-
-fun getCurrentTime(): String{
-    val calendar = Calendar.getInstance()
-    val hour = calendar.get(Calendar.HOUR_OF_DAY)
-    val minute = calendar.get(Calendar.MINUTE)
-    return String.format("%02d:%02d", hour, minute)
-}
-
-fun showTimePicker(
-    context: android.content.Context,
-    onTimeSelected: (String?) -> Unit // ahora puede ser null
-) {
-    val calendar = Calendar.getInstance()
-    val dialog = TimePickerDialog(
-        context,
-        { _, hour, minute ->
-            val formatted = String.format("%02d:%02d", hour, minute)
-            onTimeSelected(formatted)
-        },
-        calendar.get(Calendar.HOUR_OF_DAY),
-        calendar.get(Calendar.MINUTE),
-        true
-    )
-
-    // Manejo de cancelación
-    dialog.setOnCancelListener {
-        onTimeSelected(null)
-    }
-
-    dialog.show()
-}
-
-fun isTimeInRange(current: String, start: String, end: String): Boolean {
-    val formatter = java.text.SimpleDateFormat("HH:mm", Locale.getDefault())
-    return try {
-        val currentDate = formatter.parse(current)
-        val startDate = formatter.parse(start)
-        val endDate = formatter.parse(end)
-
-        if (startDate.before(endDate)) {
-            !currentDate.before(startDate) && currentDate.before(endDate)
-        } else {
-            !currentDate.before(startDate) || currentDate.before(endDate)
-        }
-    } catch (e: Exception) {
-        false
     }
 }
 //Modelo temporizador
